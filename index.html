@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Luma — spoken navigation preview</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0e0e0c;
+      --surface: #17170f;
+      --text: #f7f3e8;
+      --muted: #c9c2b0;
+      --line: #3d3a30;
+      --yellow: #ffe14a;
+      --stop: #ff8d7a;
+      --wait: #ffe14a;
+      --clear: #b6e36a;
+      --none: #c9c2b0;
+    }
+    * { box-sizing: border-box; }
+    html { font-size: 112%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+      line-height: 1.45;
+    }
+    .skip {
+      position: absolute;
+      left: 0.75rem;
+      top: -4rem;
+      background: var(--yellow);
+      color: #16140c;
+      padding: 0.6rem 1rem;
+      z-index: 2;
+      font-weight: 700;
+    }
+    .skip:focus { top: 0.75rem; }
+    .wrap {
+      max-width: 42rem;
+      margin: 0 auto;
+      padding: 1.5rem 1.1rem 4rem;
+    }
+    header h1 {
+      font-size: 3rem;
+      line-height: 1;
+      margin: 0.15rem 0 0.6rem;
+      letter-spacing: -0.03em;
+    }
+    .eyebrow, .lede, .choice-copy, .hint, .meta {
+      color: var(--muted);
+    }
+    .eyebrow {
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+    }
+    .lede { font-size: 1.2rem; margin-top: 0; }
+    .notice {
+      border-left: 6px solid var(--yellow);
+      background: var(--surface);
+      padding: 0.9rem 1rem;
+      margin: 1.25rem 0 1.5rem;
+    }
+    .notice p { margin: 0; }
+    .notice p + p { margin-top: 0.75rem; }
+    fieldset {
+      border: 0;
+      margin: 0 0 1.25rem;
+      padding: 0;
+    }
+    legend {
+      font-weight: 700;
+      font-size: 1.25rem;
+      padding: 0;
+      margin-bottom: 0.35rem;
+    }
+    .choice {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      border: 2px solid var(--line);
+      background: var(--surface);
+      padding: 0.85rem 0.9rem;
+      margin: 0.45rem 0;
+      cursor: pointer;
+    }
+    .choice:has(input:checked) { border-color: var(--yellow); }
+    .choice:has(input:focus-visible) {
+      outline: 3px solid var(--yellow);
+      outline-offset: 3px;
+    }
+    .choice input {
+      width: 1.35rem;
+      height: 1.35rem;
+      margin-top: 0.2rem;
+      accent-color: var(--yellow);
+      flex: none;
+    }
+    .choice-title { display: block; font-weight: 700; }
+    label.field { display: block; font-weight: 700; margin-bottom: 0.35rem; }
+    input[type="text"] {
+      width: 100%;
+      background: #000;
+      color: var(--text);
+      border: 2px solid var(--line);
+      font: inherit;
+      padding: 0.75rem 0.8rem;
+    }
+    input[type="text"]:focus-visible,
+    button:focus-visible,
+    input[type="range"]:focus-visible {
+      outline: 3px solid var(--yellow);
+      outline-offset: 3px;
+    }
+    .prompts { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.7rem; }
+    button, .check {
+      font: inherit;
+    }
+    button {
+      background: var(--yellow);
+      color: #16140c;
+      border: 2px solid var(--yellow);
+      font-weight: 700;
+      min-height: 3rem;
+      padding: 0.55rem 0.9rem;
+      cursor: pointer;
+      text-align: left;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--line);
+    }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    button.look-now, button.stop-looking {
+      display: block;
+      width: 100%;
+      text-align: center;
+      margin: 0.55rem 0;
+    }
+    button.look-now {
+      font-size: 1.7rem;
+      min-height: 4.75rem;
+    }
+    button.stop-looking { min-height: 3.5rem; }
+    #look-preview {
+      width: 100%;
+      max-height: 16rem;
+      object-fit: cover;
+      background: #000;
+      margin: 0.2rem 0 0.8rem;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1rem 0 0.8rem;
+    }
+    .settings {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 1.5rem;
+      align-items: center;
+      color: var(--muted);
+    }
+    .settings label { display: flex; gap: 0.5rem; align-items: center; }
+    input[type="checkbox"] {
+      width: 1.25rem;
+      height: 1.25rem;
+      accent-color: var(--yellow);
+    }
+    #answer {
+      margin-top: 1.75rem;
+      border: 4px solid var(--line);
+      padding: 1rem 1rem 1.1rem;
+    }
+    #answer.stop { border-color: var(--stop); }
+    #answer.wait { border-color: var(--wait); }
+    #answer.clear,
+    #answer.continue { border-color: var(--clear); }
+    #answer.none { border-color: var(--none); }
+    #answer h2 { margin: 0 0 0.4rem; font-size: 2.4rem; line-height: 1; }
+    #live { font-size: 1.2rem; margin: 0; }
+    .detail {
+      margin-top: 0.8rem;
+      color: var(--muted);
+    }
+    .moments { margin-top: 1.4rem; }
+    .moments h3 { margin-bottom: 0.4rem; }
+    .moment {
+      border-top: 1px solid var(--line);
+      padding: 0.8rem 0;
+    }
+    video {
+      width: 100%;
+      margin-top: 0.6rem;
+      background: #000;
+    }
+    .hint { margin-top: 0.4rem; }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#question">Skip to your question</a>
+  <div class="wrap">
+    <header>
+      <p class="eyebrow">Navigation preview</p>
+      <h1>Luma</h1>
+      <p class="lede">Ask what the cameras saw on a street, a path, or indoors. Luma answers with Stop, Wait, or Clear, in words you can hear.</p>
+      <p class="lede">Or press Look now. Every 4 seconds Luma says Stop, Wait, or Clear, then a short phrase for what is in the way.</p>
+    </header>
+    <div class="notice">
+      <p><strong>Recorded video only</strong> for Ask Luma and Walk this place. Those answers cannot see the place you are standing. Before you move, use your cane, a crossing signal you can hear, or a person with you.</p>
+      <p>Look now reports one frame at a time. It will not tell you to cross, step off a curb, or enter a road.</p>
+    </div>
+    <p class="hint">Sidewalk and crossing clips include Mixkit free stock video, plus one eye-level sidewalk walk already in the archive.</p>
+    <main>
+      <section aria-labelledby="look-heading">
+        <h2 id="look-heading">Look now</h2>
+        <p>Point the camera, then press Look now. Every 4 seconds Luma says Stop, Wait, or Clear, then a short phrase for what is in the way. Things farther than about 1 meter are ignored until they are close enough to be in the way.</p>
+        <button type="button" id="look-now" class="look-now">Look now</button>
+        <button type="button" id="stop-looking" class="secondary stop-looking" disabled>Stop looking</button>
+        <video id="look-preview" muted playsinline hidden aria-label="Camera preview, sound off"></video>
+        <p class="hint">If the browser does not allow the camera, Luma says so in plain language. Camera sound stays off so it does not cover the spoken brief.</p>
+      </section>
+      <form id="guide-form">
+        <fieldset>
+          <legend>What do you want to check?</legend>
+          <div id="modes" role="radiogroup" aria-label="What do you want to check?"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Which place?</legend>
+          <div id="places"></div>
+        </fieldset>
+        <div>
+          <label class="field" for="question">Your question</label>
+          <input id="question" name="question" type="text" autocomplete="off" required>
+          <p class="hint" id="voice-hint">You can type, or use Speak your question.</p>
+          <div class="prompts" id="prompts"></div>
+        </div>
+        <div class="actions">
+          <button type="submit" id="ask">Ask Luma</button>
+          <button type="button" id="walk">Walk this place</button>
+          <button type="button" class="secondary" id="prev-step" disabled>Previous step</button>
+          <button type="button" class="secondary" id="next-step" disabled>Next step</button>
+          <button type="button" class="secondary" id="mic">Speak your question</button>
+          <button type="button" class="secondary" id="repeat" disabled>Repeat answer</button>
+          <button type="button" class="secondary" id="stop-speech">Stop speaking</button>
+        </div>
+        <div class="settings">
+          <label class="check">
+            <input type="checkbox" id="speak" checked>
+            Speak answers aloud. Uncheck this if your screen reader is already talking.
+          </label>
+          <label>
+            Speech rate
+            <input id="rate" type="range" min="0.8" max="1.2" step="0.1" value="0.9" aria-valuemin="0.8" aria-valuemax="1.2" aria-valuenow="0.9" aria-valuetext="90 percent">
+          </label>
+        </div>
+      </form>
+      <section id="answer" aria-labelledby="answer-heading">
+        <h2 id="answer-heading" tabindex="-1">Answer</h2>
+        <p id="live" role="status" aria-live="polite" aria-atomic="true">Ask a question to hear a brief.</p>
+        <p class="detail" id="detail" hidden></p>
+        <div class="moments" id="moments"></div>
+      </section>
+    </main>
+  </div>
+  <script>
+    const apiPrefix = location.pathname.includes("/app") ? "/app" : "";
+    const modesEl = document.getElementById("modes");
+    const placesEl = document.getElementById("places");
+    const promptsEl = document.getElementById("prompts");
+    const form = document.getElementById("guide-form");
+    const questionEl = document.getElementById("question");
+    const live = document.getElementById("live");
+    const detail = document.getElementById("detail");
+    const momentsEl = document.getElementById("moments");
+    const answerEl = document.getElementById("answer");
+    const heading = document.getElementById("answer-heading");
+    const askBtn = document.getElementById("ask");
+    const micBtn = document.getElementById("mic");
+    const repeatBtn = document.getElementById("repeat");
+    const speakBox = document.getElementById("speak");
+    const rateEl = document.getElementById("rate");
+    let catalog = null;
+    let lastSpoken = "";
+    let walkSteps = [];
+    let walkIndex = 0;
+
+    function api(path) {
+      return apiPrefix + path;
+    }
+
+    function selected(name) {
+      const node = form.querySelector(`input[name="${name}"]:checked`);
+      return node ? node.value : "";
+    }
+
+    function currentMode() {
+      return catalog.modes.find((mode) => mode.id === selected("mode")) || catalog.modes[0];
+    }
+
+    function renderPlaces() {
+      const mode = currentMode();
+      placesEl.replaceChildren();
+      mode.places.forEach((place, index) => {
+        const label = document.createElement("label");
+        label.className = "choice";
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = "place";
+        input.value = place.id;
+        input.checked = index === 0;
+        input.addEventListener("change", renderPrompts);
+        const text = document.createElement("span");
+        const title = document.createElement("span");
+        title.className = "choice-title";
+        title.textContent = place.label;
+        const copy = document.createElement("span");
+        copy.className = "choice-copy";
+        copy.textContent = place.detail;
+        text.append(title, copy);
+        label.append(input, text);
+        placesEl.append(label);
+      });
+      renderPrompts();
+    }
+
+    function renderPrompts() {
+      const mode = currentMode();
+      const place = mode.places.find((item) => item.id === selected("place")) || mode.places[0];
+      promptsEl.replaceChildren();
+      place.prompts.forEach((prompt) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary";
+        button.textContent = prompt;
+        button.addEventListener("click", () => {
+          questionEl.value = prompt;
+          form.requestSubmit();
+        });
+        promptsEl.append(button);
+      });
+    }
+
+    function renderModes() {
+      modesEl.replaceChildren();
+      catalog.modes.forEach((mode, index) => {
+        const label = document.createElement("label");
+        label.className = "choice";
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = "mode";
+        input.value = mode.id;
+        input.checked = index === 0;
+        input.addEventListener("change", renderPlaces);
+        const text = document.createElement("span");
+        const title = document.createElement("span");
+        title.className = "choice-title";
+        title.textContent = mode.label;
+        const copy = document.createElement("span");
+        copy.className = "choice-copy";
+        copy.textContent = mode.description;
+        text.append(title, copy);
+        label.append(input, text);
+        modesEl.append(label);
+      });
+      renderPlaces();
+    }
+
+    function speak(text) {
+      if (!speakBox.checked || !window.speechSynthesis || !text) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = Number(rateEl.value);
+      utterance.lang = "en-US";
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function objectLine(objects) {
+      if (!objects || !objects.length) return "";
+      return "Detected nearby: " + objects.join(", ") + ".";
+    }
+
+    function showAnswer(data, options) {
+      const opts = options || {};
+      answerEl.className = data.status || "";
+      heading.textContent = data.status_label || "Answer";
+      live.textContent = data.spoken || "";
+      lastSpoken = data.spoken || "";
+      repeatBtn.disabled = !lastSpoken;
+      if (data.detail) {
+        detail.hidden = false;
+        detail.textContent = "More from the cameras: " + data.detail;
+      } else {
+        detail.hidden = true;
+        detail.textContent = "";
+      }
+      momentsEl.replaceChildren();
+      if (data.moments && data.moments.length) {
+        const title = document.createElement("h3");
+        title.textContent = "Moments a companion can play";
+        const list = document.createElement("ol");
+        data.moments.forEach((moment) => {
+          const item = document.createElement("li");
+          item.className = "moment";
+          const where = document.createElement("p");
+          const strong = document.createElement("strong");
+          strong.textContent = moment.camera;
+          where.append(strong, document.createTextNode(
+            `, from ${moment.start_short} to ${moment.end_short}.`
+          ));
+          const sentence = document.createElement("p");
+          sentence.textContent = moment.sentence;
+          item.append(where, sentence);
+          if (moment.objects && moment.objects.length) {
+            const objects = document.createElement("p");
+            objects.className = "meta";
+            objects.textContent = objectLine(moment.objects);
+            item.append(objects);
+          }
+          if (moment.source) {
+            const video = document.createElement("video");
+            video.controls = true;
+            video.preload = "none";
+            video.setAttribute("aria-label", `${moment.camera} from ${moment.start_label} to ${moment.end_label}`);
+            video.src = api("/api/media?source=" + encodeURIComponent(moment.source));
+            item.append(video);
+          }
+          list.append(item);
+        });
+        momentsEl.append(title, list);
+      }
+      if (opts.focus !== false) heading.focus();
+      if (opts.speak !== false) speak(lastSpoken);
+    }
+
+    async function ask(event) {
+      event.preventDefault();
+      if (looking) stopLooking({ speak: false });
+      const question = questionEl.value.trim();
+      if (!question) {
+        questionEl.focus();
+        return;
+      }
+      askBtn.disabled = true;
+      answerEl.className = "";
+      heading.textContent = "Searching";
+      live.textContent = "Searching the cameras. This can take a few seconds.";
+      detail.hidden = true;
+      momentsEl.replaceChildren();
+      try {
+        const response = await fetch(api("/api/guide"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: selected("mode"),
+            place: selected("place"),
+            question
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          showAnswer({
+            status: "none",
+            status_label: "Try again",
+            spoken: data.error || "The cameras could not be searched.",
+            moments: []
+          });
+          return;
+        }
+        showAnswer(data);
+      } catch (error) {
+        showAnswer({
+          status: "none",
+          status_label: "Try again",
+          spoken: "The cameras could not be reached. Check your connection and ask again.",
+          moments: []
+        });
+      } finally {
+        askBtn.disabled = false;
+      }
+    }
+
+    function showStep(index) {
+      if (!walkSteps.length) return;
+      walkIndex = Math.max(0, Math.min(index, walkSteps.length - 1));
+      const step = walkSteps[walkIndex];
+      document.getElementById("prev-step").disabled = walkIndex === 0;
+      document.getElementById("next-step").disabled = walkIndex === walkSteps.length - 1;
+      showAnswer({
+        status: "wait",
+        status_label: "Step " + step.index + " of " + step.total,
+        spoken: step.spoken,
+        moments: [step]
+      });
+    }
+
+    async function startWalk() {
+      if (looking) stopLooking({ speak: false });
+      const walkBtn = document.getElementById("walk");
+      walkBtn.disabled = true;
+      heading.textContent = "Loading the walk";
+      live.textContent = "Loading the walk. This can take a few seconds.";
+      detail.hidden = true;
+      momentsEl.replaceChildren();
+      try {
+        const response = await fetch(api("/api/walk?place=" + encodeURIComponent(selected("place"))));
+        const data = await response.json();
+        if (!response.ok || !data.steps || !data.steps.length) {
+          showAnswer({
+            status: "none",
+            status_label: "Try again",
+            spoken: data.error || "No walk is ready for this place.",
+            moments: []
+          });
+          return;
+        }
+        walkSteps = data.steps;
+        showStep(0);
+      } catch (error) {
+        showAnswer({
+          status: "none",
+          status_label: "Try again",
+          spoken: "The walk could not be loaded. Try again.",
+          moments: []
+        });
+      } finally {
+        walkBtn.disabled = false;
+      }
+    }
+
+    form.addEventListener("submit", ask);
+    document.getElementById("walk").addEventListener("click", startWalk);
+    document.getElementById("prev-step").addEventListener("click", () => showStep(walkIndex - 1));
+    document.getElementById("next-step").addEventListener("click", () => showStep(walkIndex + 1));
+    repeatBtn.addEventListener("click", () => speak(lastSpoken));
+    document.getElementById("stop-speech").addEventListener("click", () => {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+    });
+    rateEl.addEventListener("input", () => {
+      const percent = Math.round(Number(rateEl.value) * 100);
+      rateEl.setAttribute("aria-valuenow", rateEl.value);
+      rateEl.setAttribute("aria-valuetext", percent + " percent");
+    });
+
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) {
+      micBtn.disabled = true;
+      document.getElementById("voice-hint").textContent = "Voice input is not available in this browser. Type your question.";
+    } else {
+      const recognition = new Recognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.addEventListener("result", (event) => {
+        const said = event.results[0][0].transcript;
+        questionEl.value = said;
+        form.requestSubmit();
+      });
+      recognition.addEventListener("error", () => {
+        live.textContent = "Voice input did not hear a question. Type it instead.";
+      });
+      micBtn.addEventListener("click", () => {
+        live.textContent = "Listening. Ask your question now.";
+        recognition.start();
+      });
+    }
+
+    const LOOK_EVERY_MS = 4000;
+    const CAMERA_READY_MS = 10000;
+    const lookBtn = document.getElementById("look-now");
+    const stopLookBtn = document.getElementById("stop-looking");
+    const lookPreview = document.getElementById("look-preview");
+    let looking = false;
+    let lookRun = 0;
+    let lookAbort = null;
+
+    function sleep(ms) {
+      return new Promise((resolve) => {
+        const step = 200;
+        let left = ms;
+        const tick = () => {
+          if (!looking || left <= 0) {
+            resolve();
+            return;
+          }
+          const slice = Math.min(step, left);
+          left -= slice;
+          setTimeout(tick, slice);
+        };
+        setTimeout(tick, Math.min(step, ms));
+      });
+    }
+
+    function waitForSpeech() {
+      return new Promise((resolve) => {
+        const started = Date.now();
+        const tick = () => {
+          if (!looking) {
+            resolve();
+            return;
+          }
+          const speaking = window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending);
+          if (!speakBox.checked || !speaking || Date.now() - started > 20000) {
+            resolve();
+            return;
+          }
+          setTimeout(tick, 250);
+        };
+        setTimeout(tick, 250);
+      });
+    }
+
+    function waitBrief(sentence) {
+      let text = String(sentence || "").replace(/\s+/g, " ").trim();
+      text = text.replace(/\blaptop\s+camera\b/gi, "camera");
+      text = text.replace(/This is only what the camera just saw\.?/gi, "");
+      text = text.replace(/Still use your cane, a sounding signal, or a person with you\.?/gi, "");
+      text = text.replace(/\s+/g, " ").trim();
+      text = text.replace(/^Continue\b/i, "Clear");
+      const wordOf = (raw) => raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+      const fallback = (word) => word === "Clear" ? "Nothing in the way" : word === "Wait" ? "Something approaching" : "Something blocking";
+      const cleanDesc = (desc, word) => {
+        let line = String(desc || "").split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, "").trim();
+        if (/\bcane\b|sounding signal|person with you|step off|enter the road|enter the street/i.test(line)) line = "";
+        if (!line) line = fallback(word);
+        const words = line.split(/\s+/);
+        if (words.length > 8) line = words.slice(0, 8).join(" ");
+        return word + ". " + line + ".";
+      };
+      const tail = text.match(/^(.*?)\s+(Stop|Wait|Clear)\.?$/i);
+      if (tail) return cleanDesc(tail[1], wordOf(tail[2]));
+      const head = text.match(/^(Stop|Wait|Clear)\.?\s*(.*)$/i);
+      if (head) return cleanDesc(head[2], wordOf(head[1]));
+      return text;
+    }
+
+    async function openCamera() {
+      const attempts = [
+        { audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 768 }, height: { ideal: 432 } } },
+        { audio: false, video: { width: { ideal: 768 }, height: { ideal: 432 } } },
+        { audio: false, video: true }
+      ];
+      let lastError = null;
+      for (const constraints of attempts) {
+        try {
+          return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (error) {
+          lastError = error;
+          const name = error && error.name;
+          if (name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError") {
+            throw error;
+          }
+        }
+      }
+      throw lastError || new Error("camera");
+    }
+
+    function waitForPreview(video) {
+      if (video.videoWidth) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          if (video.videoWidth) resolve();
+          else reject(new Error("timeout"));
+        }, CAMERA_READY_MS);
+        const done = () => {
+          if (!video.videoWidth) return;
+          clearTimeout(timer);
+          resolve();
+        };
+        video.addEventListener("loadeddata", done);
+        video.addEventListener("resize", done);
+      });
+    }
+
+    function grabFrame(video) {
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (!width || !height) return "";
+      const scale = Math.min(1, 768 / width);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(2, Math.round(width * scale));
+      canvas.height = Math.max(2, Math.round(height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) return "";
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const url = canvas.toDataURL("image/jpeg", 0.72);
+      const comma = url.indexOf(",");
+      return comma >= 0 ? url.slice(comma + 1) : "";
+    }
+
+    function stopLooking(options) {
+      const opts = options || {};
+      const was = looking;
+      looking = false;
+      lookRun += 1;
+      if (lookAbort) {
+        lookAbort.abort();
+        lookAbort = null;
+      }
+      const stream = lookPreview.srcObject;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        lookPreview.srcObject = null;
+      }
+      lookPreview.hidden = true;
+      lookBtn.disabled = false;
+      stopLookBtn.disabled = true;
+      if (was && opts.speak !== false) {
+        showAnswer({
+          status: "none",
+          status_label: "Camera off",
+          spoken: "Camera is off. Stopped looking.",
+          moments: []
+        }, { focus: false });
+        lookBtn.focus();
+      }
+    }
+
+    async function runLook(run) {
+      if (!looking || run !== lookRun) return;
+      heading.textContent = "Looking";
+      answerEl.className = "wait";
+      live.textContent = "Looking at the camera.";
+      const image = grabFrame(lookPreview);
+      if (!image) {
+        showAnswer({
+          status: "wait",
+          status_label: "Wait",
+          spoken: "Wait. The camera did not have a picture yet.",
+          moments: []
+        }, { focus: false });
+        return;
+      }
+      lookAbort = new AbortController();
+      const signal = lookAbort.signal;
+      try {
+        const response = await fetch(api("/api/look"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image_base64: image }),
+          signal
+        });
+        const data = await response.json();
+        if (!looking || run !== lookRun) return;
+        if (!response.ok) {
+          showAnswer({
+            status: "wait",
+            status_label: "Wait",
+            spoken: waitBrief(data.error || "Luma could not look at that frame."),
+            moments: []
+          }, { focus: false });
+          return;
+        }
+        if (data.spoken) data.spoken = waitBrief(data.spoken);
+        if (!data.status) data.status = "wait";
+        showAnswer(data, { focus: false });
+      } catch (error) {
+        if (!looking || run !== lookRun || (error && error.name === "AbortError")) return;
+        showAnswer({
+          status: "wait",
+          status_label: "Wait",
+          spoken: "Wait. Luma could not reach the look service.",
+          moments: []
+        }, { focus: false });
+      }
+    }
+
+    async function startLooking() {
+      if (looking) return;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showAnswer({
+          status: "none",
+          status_label: "Camera off",
+          spoken: "This browser cannot use the camera. You can still ask Luma about recorded places.",
+          moments: []
+        });
+        return;
+      }
+      let stream;
+      try {
+        stream = await openCamera();
+      } catch (error) {
+        const name = error && error.name;
+        const denied = name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError";
+        showAnswer({
+          status: "none",
+          status_label: "Camera off",
+          spoken: denied
+            ? "The browser did not allow the camera. Allow the camera for this page, then press Look now again."
+            : "The camera could not start. Check that it is connected, then press Look now again.",
+          moments: []
+        });
+        return;
+      }
+      stream.getAudioTracks().forEach((track) => track.stop());
+      looking = true;
+      lookRun += 1;
+      const run = lookRun;
+      lookPreview.muted = true;
+      lookPreview.volume = 0;
+      lookPreview.defaultMuted = true;
+      lookPreview.srcObject = stream;
+      lookPreview.hidden = false;
+      try {
+        await lookPreview.play();
+      } catch (error) {
+        /* A muted preview can be blocked. Frame capture still uses the stream. */
+      }
+      stopLookBtn.disabled = false;
+      stopLookBtn.focus();
+      lookBtn.disabled = true;
+      showAnswer({
+        status: "wait",
+        status_label: "Camera on",
+        spoken: "Camera is on. Luma will describe the camera about every 4 seconds.",
+        moments: []
+      }, { focus: false });
+      try {
+        await waitForPreview(lookPreview);
+      } catch (error) {
+        stopLooking({ speak: false });
+        showAnswer({
+          status: "none",
+          status_label: "Camera off",
+          spoken: "The camera did not show a picture. Press Look now to try again.",
+          moments: []
+        });
+        return;
+      }
+      await waitForSpeech();
+      while (looking && run === lookRun) {
+        const started = Date.now();
+        await runLook(run);
+        if (!looking || run !== lookRun) break;
+        await waitForSpeech();
+        const remain = LOOK_EVERY_MS - (Date.now() - started);
+        if (remain > 0) await sleep(remain);
+      }
+    }
+
+    lookBtn.addEventListener("click", startLooking);
+    stopLookBtn.addEventListener("click", () => stopLooking());
+    window.addEventListener("pagehide", () => stopLooking({ speak: false }));
+
+    fetch(api("/api/catalog"))
+      .then((response) => response.json())
+      .then((data) => {
+        catalog = data;
+        renderModes();
+      })
+      .catch(() => {
+        live.textContent = "Luma could not load places. Reload the page.";
+      });
+  </script>
+</body>
+</html>
