@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Luma — spoken navigation preview</title>
+  <title>SeeAI — spoken navigation preview</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
   <style>
     :root {
@@ -213,23 +213,23 @@
   <div class="wrap">
     <header>
       <p class="eyebrow">Navigation preview</p>
-      <h1>Luma</h1>
-      <p class="lede">Ask what the cameras saw on a street, a path, or indoors. Luma answers with Stop, Wait, or Clear, in words you can hear.</p>
-      <p class="lede">Or press Look now. Every 4 seconds Luma says Stop, Wait, or Clear, then a short phrase for what is in the way.</p>
+      <h1>SeeAI</h1>
+      <p class="lede">Ask what the cameras saw on a street, a path, or indoors. SeeAI answers with Stop, Wait, or Clear, in words you can hear.</p>
+      <p class="lede">Or press Look now. Every 4 seconds SeeAI says Stop, Wait, or Clear, then a short phrase for what is in the way.</p>
     </header>
     <div class="notice">
-      <p><strong>Recorded video only</strong> for Ask Luma and Walk this place. Those answers cannot see the place you are standing. Before you move, use your cane, a crossing signal you can hear, or a person with you.</p>
+      <p><strong>Recorded video only</strong> for Ask SeeAI and Walk this place. Those answers cannot see the place you are standing. Before you move, use your cane, a crossing signal you can hear, or a person with you.</p>
       <p>Look now reports one frame at a time. It will not tell you to cross, step off a curb, or enter a road.</p>
     </div>
     <p class="hint">Sidewalk and crossing clips include Mixkit free stock video, plus one eye-level sidewalk walk already in the archive.</p>
     <main>
       <section aria-labelledby="look-heading">
         <h2 id="look-heading">Look now</h2>
-        <p>Point the camera, then press Look now. Every 4 seconds Luma describes what the camera sees. A model reads that description and says Stop, Wait, or Clear.</p>
+        <p>Point the camera, then press Look now. Every 4 seconds SeeAI describes what the camera sees. A model reads that description and says Stop, Wait, or Clear.</p>
         <button type="button" id="look-now" class="look-now">Look now</button>
         <button type="button" id="stop-looking" class="secondary stop-looking" disabled>Stop looking</button>
         <video id="look-preview" muted playsinline hidden aria-label="Camera preview, sound off"></video>
-        <p class="hint">If the browser does not allow the camera, Luma says so in plain language. Camera sound stays off so it does not cover the spoken brief.</p>
+        <p class="hint">If the browser does not allow the camera, SeeAI says so in plain language. Camera sound stays off so it does not cover the spoken brief.</p>
       </section>
       <form id="guide-form">
         <fieldset>
@@ -247,7 +247,7 @@
           <div class="prompts" id="prompts"></div>
         </div>
         <div class="actions">
-          <button type="submit" id="ask">Ask Luma</button>
+          <button type="submit" id="ask">Ask SeeAI</button>
           <button type="button" id="walk">Walk this place</button>
           <button type="button" class="secondary" id="prev-step" disabled>Previous step</button>
           <button type="button" class="secondary" id="next-step" disabled>Next step</button>
@@ -756,7 +756,7 @@
           showAnswer({
             status: "wait",
             status_label: "Wait",
-            spoken: waitBrief(data.error || "Luma could not look at that frame."),
+            spoken: waitBrief(data.error || "SeeAI could not look at that frame."),
             moments: []
           }, { focus: false });
           return;
@@ -769,7 +769,7 @@
         showAnswer({
           status: "wait",
           status_label: "Wait",
-          spoken: "Wait. Luma could not reach the look service.",
+          spoken: "Wait. SeeAI could not reach the look service.",
           moments: []
         }, { focus: false });
       }
@@ -781,7 +781,7 @@
         showAnswer({
           status: "none",
           status_label: "Camera off",
-          spoken: "This browser cannot use the camera. You can still ask Luma about recorded places.",
+          spoken: "This browser cannot use the camera. You can still ask SeeAI about recorded places.",
           moments: []
         });
         return;
@@ -822,7 +822,7 @@
       showAnswer({
         status: "wait",
         status_label: "Camera on",
-        spoken: "Camera is on. Luma will describe the camera about every 4 seconds.",
+        spoken: "Camera is on. SeeAI will describe the camera about every 4 seconds.",
         moments: []
       }, { focus: false });
       try {
@@ -859,7 +859,7 @@
         renderModes();
       })
       .catch(() => {
-        live.textContent = "Luma could not load places. Reload the page.";
+        live.textContent = "SeeAI could not load places. Reload the page.";
       });
   </script>
 </body>

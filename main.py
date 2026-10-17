@@ -1,4 +1,4 @@
-"""Luma: spoken navigation previews for blind and low-vision travelers.
+"""SeeAI: spoken navigation previews for blind and low-vision travelers.
 
 Searches indexed street, path, and indoor cameras and answers with a short
 brief: Stop, Wait, or Clear. The footage is recorded. Briefs describe what
@@ -756,10 +756,10 @@ def _gpu_json(url: str, body: dict, timeout: int) -> dict:
             return json.load(response)
     except urllib.error.HTTPError as error:
         error.read()
-        print(f"[luma] look model http {error.code}")
+        print(f"[seeai] look model http {error.code}")
         raise RuntimeError("look model rejected the frame") from error
     except urllib.error.URLError as error:
-        print("[luma] look model unreachable")
+        print("[seeai] look model unreachable")
         raise RuntimeError("look model unreachable") from error
 
 
@@ -1229,7 +1229,7 @@ def describe_look(image_b64: str, video_b64: str = "") -> dict:
     status, reason = parse_judge(ask_judge(description))
     spoken = speak_description(status, description)
     trace = look_trace(description, status, reason)
-    print(f"[luma] look {trace}")
+    print(f"[seeai] look {trace}")
     return {
         "status": status,
         "status_label": LOOK_LABELS[status],
@@ -1245,10 +1245,10 @@ SAFE_SOURCE = re.compile(r"^s3://[A-Za-z0-9._:/-]+$")
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "Luma/1.0"
+    server_version = "SeeAI/1.0"
 
     def log_message(self, fmt: str, *args) -> None:
-        print(f"[luma] {self.address_string()} {fmt % args}")
+        print(f"[seeai] {self.address_string()} {fmt % args}")
 
     def do_GET(self) -> None:  # noqa: N802
         path = urllib.parse.urlsplit(self.path).path
@@ -1278,7 +1278,7 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as error:
             self._json(400, {"error": str(error)})
         except Exception as error:  # noqa: BLE001
-            print(f"[luma] walk error: {type(error).__name__}: {error}")
+            print(f"[seeai] walk error: {type(error).__name__}: {error}")
             self._json(502, {"error": "The walk could not be loaded. Try again."})
 
     def do_POST(self) -> None:  # noqa: N802
@@ -1308,7 +1308,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(error)})
             return
         except Exception as error:  # noqa: BLE001
-            print(f"[luma] guide error: {type(error).__name__}: {error}")
+            print(f"[seeai] guide error: {type(error).__name__}: {error}")
             self._json(502, {"error": "The cameras could not be searched. Try again."})
             return
         self._json(200, result)
@@ -1338,8 +1338,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(error)})
             return
         except Exception as error:  # noqa: BLE001
-            print(f"[luma] look error: {type(error).__name__}")
-            self._json(502, {"error": "Luma could not look at that frame. Try again."})
+            print(f"[seeai] look error: {type(error).__name__}")
+            self._json(502, {"error": "SeeAI could not look at that frame. Try again."})
             return
         self._json(200, result)
 
@@ -1355,7 +1355,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(error.code, {"error": "The clip could not be played."})
             return
         except Exception as error:  # noqa: BLE001
-            print(f"[luma] media error: {type(error).__name__}")
+            print(f"[seeai] media error: {type(error).__name__}")
             self._json(502, {"error": "The clip could not be played."})
             return
         try:
@@ -1390,7 +1390,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"[luma] listening on {PORT}")
+    print(f"[seeai] listening on {PORT}")
     server.serve_forever()
 
 

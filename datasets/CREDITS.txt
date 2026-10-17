@@ -1,4 +1,4 @@
-Sidewalk and crossing clips used by Luma.
+Sidewalk and crossing clips used by SeeAI.
 Source: Mixkit free stock video, https://mixkit.co/license/#videoFree
 License: Mixkit Stock Video Free License. Free to use in this demo. No attribution required.
 Downloaded 2026-10-17 as 720p mp4.
