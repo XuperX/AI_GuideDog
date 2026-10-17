@@ -258,22 +258,24 @@ GPU_BEARER_TOKEN = os.environ.get("GPU_BEARER_TOKEN") or ""
 
 LOOK_PROMPT = (
     "You are looking at one frame from a camera held by a person who cannot see. "
-    "Describe only what is happening ahead. Do not give directions. "
+    "Describe what is in the frame in one or two short sentences. "
+    "Say what is ahead, what it is doing, and whether it is in the way. "
+    "Describe only what is visible. Do not give directions. "
+    "Do not say Stop, Wait, or Clear. "
     "Do not say to cross, step off a curb, or enter a road. "
-    "Do not mention a cane, a sounding signal, or someone accompanying the traveler. "
-    "Reply with exactly these five lines and nothing else:\n"
-    "PATH: open or approaching or blocked\n"
-    "PERSON: yes or no\n"
-    "VEHICLE: yes or no\n"
-    "SHARING: yes or no\n"
-    "SCENE: one short honest sentence of what is ahead. Name the thing and what it is doing.\n"
-    "Write that sentence even if the thing is parked or off to the side.\n"
-    "Use SCENE none only when the way ahead is empty.\n"
-    "Then set PATH from that sentence.\n"
-    "PATH open when nothing is in the way and nothing is coming closer.\n"
-    "PATH approaching when a hazard is coming closer but is not yet in the way.\n"
-    "PATH blocked when something is already an immediate blocker in the way.\n"
-    "Do not start SCENE with Stop, Wait, or Clear."
+    "Do not mention a cane, a sounding signal, or someone accompanying the traveler."
+)
+JUDGE_PROMPT = (
+    "You are judging a description of one camera frame for a person who cannot see. "
+    "Read the description and choose one signal. "
+    "Reply with exactly two lines and nothing else:\n"
+    "SIGNAL: Clear or Wait or Stop\n"
+    "WHY: one short reason from the description.\n"
+    "Clear means the road or path ahead is open, or nothing is in the way. "
+    "Wait means a hazard is approaching but is not yet in the way. "
+    "Stop means something is an immediate blocker, already in the way. "
+    "Do not give directions. Do not say to cross, step off a curb, or enter a road.\n"
+    "Description:\n"
 )
 LOOK_LABELS = {"stop": "Stop", "wait": "Wait", "clear": "Clear"}
 
@@ -818,6 +820,40 @@ def ask_reason(jpeg: bytes) -> str:
     return message_text(choices[0].get("message") or {})
 
 
+def ask_judge(description: str) -> str:
+    """Ask the model to choose Clear, Wait, or Stop from the description alone."""
+    payload = {
+        "model": COSMOS3_REASON_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": JUDGE_PROMPT + (description or "The frame had no description."),
+            }
+        ],
+        "max_tokens": 80,
+        "temperature": 0,
+    }
+    data = _gpu_json(COSMOS3_REASON_URL + "/v1/chat/completions", payload, timeout=45)
+    choices = data.get("choices") or []
+    if not choices:
+        return ""
+    return message_text(choices[0].get("message") or {})
+
+
+def parse_judge(text: str) -> tuple[str, str]:
+    """Read the judge model's signal. This does not score the scene with a keyword list."""
+    raw = text or ""
+    signal = re.search(r"SIGNAL:\s*(clear|wait|stop)\b", raw, re.I)
+    why = re.search(r"WHY:\s*(.+)", raw, re.I)
+    reason = " ".join(why.group(1).split()) if why else ""
+    if signal:
+        return signal.group(1).lower(), reason or "the judge chose this from the description"
+    lone = re.search(r"\b(clear|wait|stop)\b", raw, re.I)
+    if lone:
+        return lone.group(1).lower(), reason or "the judge chose this from the description"
+    return "wait", "the judge did not return a signal"
+
+
 def yolo_counts(video_b64: str) -> dict[str, int]:
     """Optional second signal. YOLO accepts an MP4 clip, not a still frame."""
     cleaned = "".join((video_b64 or "").split())
@@ -1130,57 +1166,66 @@ def hazard_phrase(status: str, scene: str, parsed: dict) -> str:
     return f"{article} {thing} {verb}."
 
 
-def spoken_look(status: str, scene: str, parsed: dict | None = None) -> str:
-    """Stop, Wait, or Clear, then the camera's own short sentence."""
-    parsed = parsed or {}
+def camera_description(text: str) -> str:
+    """Keep the model's own description, up to two short sentences."""
+    cleaned = re.sub(r"[#*_`>]", "", text or "")
+    cleaned = " ".join(cleaned.split())
+    cleaned = re.sub(r"^(stop|wait|continue|clear)\b[.!:\-\s]*", "", cleaned, flags=re.I).strip()
+    if not cleaned:
+        return ""
+    banned = (
+        "cross now",
+        "you should cross",
+        "go ahead and cross",
+        "step off the curb",
+        "step off a curb",
+        "enter the road",
+        "enter the street",
+        "walk into the road",
+        "walk into the street",
+    )
+    parts = [part.strip() for part in re.split(r"(?<=[.!?])\s+", cleaned) if part.strip()]
+    kept: list[str] = []
+    for part in parts:
+        if any(phrase in part.lower() for phrase in banned):
+            continue
+        kept.append(part if part[-1] in ".!?" else part + ".")
+        if len(kept) == 2:
+            break
+    text = " ".join(kept)
+    words = text.replace(".", " ").replace("!", " ").replace("?", " ").split()
+    if len(words) > 40:
+        text = " ".join(words[:40]).rstrip(".,;:") + "."
+    if text and text[0].islower():
+        text = text[0].upper() + text[1:]
+    return text
+
+
+def speak_description(status: str, description: str) -> str:
+    """The signal, then what the camera described."""
     label = {"stop": "Stop.", "wait": "Wait.", "clear": "Clear."}[status]
-    description = one_short_sentence(scene, limit=16)
-    bare = (description or "").lower().rstrip(".!?")
-    if not description or bare == "none":
-        description = hazard_phrase(status, scene, parsed) or {
-            "clear": "Nothing in the way.",
-            "wait": "Something approaching.",
-            "stop": "Something blocking.",
-        }[status]
-    elif description[0].islower():
-        description = description[0].upper() + description[1:]
-    if description[-1] not in ".!?":
-        description += "."
-    return f"{label} {description}"
+    sentence = description or "The camera did not describe the frame."
+    if sentence[-1] not in ".!?":
+        sentence += "."
+    return f"{label} {sentence}"
 
 
-def yes_no_label(value) -> str:
-    if value is True:
-        return "yes"
-    if value is False:
-        return "no"
-    return "not said"
-
-
-def look_trace(parsed: dict, status: str, reason: str, spoken: str) -> str:
-    scene = (parsed.get("scene") or "").strip() or "none"
+def look_trace(description: str, status: str, reason: str) -> str:
+    scene = description or "none"
     return (
-        f"Camera sentence: {scene}. "
-        f"Path {parsed.get('path') or 'unsure'}, "
-        f"person {yes_no_label(parsed.get('person'))}, "
-        f"vehicle {yes_no_label(parsed.get('vehicle'))}. "
-        f"Signal {status} because {reason}."
+        f"Camera description: {scene} "
+        f"Judge {status} because {reason}."
     )
 
 
 def describe_look(image_b64: str, video_b64: str = "") -> dict:
+    del video_b64
     jpeg = decode_jpeg(image_b64)
-    counts = yolo_counts(video_b64) if video_b64 else {}
-    try:
-        text = ask_reason(jpeg)
-    except RuntimeError:
-        if not counts:
-            raise
-        text = ""
-    parsed = parse_look(text)
-    status, reason = decide_look(parsed, counts)
-    spoken = spoken_look(status, parsed.get("scene") or "", parsed)
-    trace = look_trace(parsed, status, reason, spoken)
+    text = ask_reason(jpeg)
+    description = camera_description(text)
+    status, reason = parse_judge(ask_judge(description))
+    spoken = speak_description(status, description)
+    trace = look_trace(description, status, reason)
     print(f"[luma] look {trace}")
     return {
         "status": status,
