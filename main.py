@@ -261,20 +261,18 @@ LOOK_PROMPT = (
     "Describe only what is happening ahead. Do not give directions. "
     "Do not say to cross, step off a curb, or enter a road. "
     "Do not mention a cane, a sounding signal, or someone accompanying the traveler. "
-    "Reply with exactly these six lines and nothing else:\n"
+    "Reply with exactly these five lines and nothing else:\n"
     "PATH: open or approaching or blocked\n"
     "PERSON: yes or no\n"
     "VEHICLE: yes or no\n"
     "SHARING: yes or no\n"
-    "DISTANCE: near or far\n"
-    "SCENE: one short sentence of what is happening ahead, or none.\n"
-    "Write SCENE first in your thinking, then set PATH from that sentence.\n"
-    "SCENE none and PATH open when the road ahead is open, or the only things are off to the side, parked, or farther than about 1 meter.\n"
-    "SCENE like 'a car approaching' and PATH approaching when a hazard is coming closer but is not yet in the way.\n"
-    "SCENE like 'a person blocking' and PATH blocked when something is already an immediate blocker in the way.\n"
-    "DISTANCE far means the thing looks farther than about 1 meter. DISTANCE near means about 1 meter or closer.\n"
-    "Judge distance by how large the thing looks. A small distant thing is far.\n"
-    "A person or car off to the side is not blocking and is not approaching.\n"
+    "SCENE: one short honest sentence of what is ahead. Name the thing and what it is doing.\n"
+    "Write that sentence even if the thing is parked or off to the side.\n"
+    "Use SCENE none only when the way ahead is empty.\n"
+    "Then set PATH from that sentence.\n"
+    "PATH open when nothing is in the way and nothing is coming closer.\n"
+    "PATH approaching when a hazard is coming closer but is not yet in the way.\n"
+    "PATH blocked when something is already an immediate blocker in the way.\n"
     "Do not start SCENE with Stop, Wait, or Clear."
 )
 LOOK_LABELS = {"stop": "Stop", "wait": "Wait", "clear": "Clear"}
@@ -945,22 +943,6 @@ def one_short_sentence(scene: str, limit: int = 15) -> str:
     return text
 
 
-def far_away(scene: str) -> bool:
-    return scene_has(
-        scene,
-        (
-            "in the distance",
-            "far away",
-            "farther than",
-            "more than a meter",
-            "more than 1 meter",
-            "across the street",
-            "down the street",
-            "not close",
-        ),
-    )
-
-
 def way_is_clear(scene: str) -> bool:
     return scene_has(
         scene,
@@ -1048,47 +1030,49 @@ def off_to_the_side(scene: str) -> bool:
     )
 
 
-def decide_look(parsed: dict, counts: dict[str, int] | None = None) -> str:
-    """Stop, Wait, or Clear from the camera description.
+def decide_look(parsed: dict, counts: dict[str, int] | None = None) -> tuple[str, str]:
+    """Stop, Wait, or Clear from the camera sentence, plus why that signal was chosen.
 
     The scene sentence decides. PATH is only a backup when that sentence does not
-    say what is happening. Clear when the road is open, the thing is off to the side,
-    or it is still farther than about 1 meter. Wait when a near hazard is approaching.
-    Stop when the description says something is already in the way. If a near person
-    or vehicle is described and the sentence does not say the road is open, Wait.
+    say what is happening. Clear when the road is open or the thing is off to the side.
+    Wait when a hazard is approaching. Stop when the description says something is
+    already in the way. If a person or vehicle is described and the sentence does
+    not say the road is open, Wait.
     """
     del counts
     path = parsed.get("path") or "unsure"
-    distance = parsed.get("distance") or ""
     scene = (parsed.get("scene") or "").strip()
     sharing = bool(parsed.get("sharing"))
-    far = distance == "far" or far_away(scene)
     in_the_way = something_in_the_way(scene)
     approaching = hazard_approaching(scene)
     beside = off_to_the_side(scene) and not in_the_way and not approaching
     explicit_none = scene.lower().rstrip(".") in {"", "none"}
 
-    if in_the_way or (sharing and not far):
-        return "stop"
-    if approaching and not far and not beside:
-        return "wait"
-    if far or beside or way_is_clear(scene):
-        return "clear"
+    if in_the_way:
+        return "stop", "the camera sentence says something is already in the way"
+    if sharing:
+        return "stop", "the camera says the path is being shared"
+    if approaching and not beside:
+        return "wait", "the camera sentence says a hazard is approaching"
+    if beside:
+        return "clear", "the thing is off to the side"
+    if way_is_clear(scene):
+        return "clear", "the camera sentence says the way is open"
     if explicit_none:
         if path == "blocked":
-            return "stop"
+            return "stop", "the camera marked the path blocked"
         if path == "approaching":
-            return "wait"
-        return "clear"
+            return "wait", "the camera marked a hazard approaching"
+        return "clear", "the camera sentence says nothing is ahead"
     if path == "open":
-        return "clear"
+        return "clear", "the camera marked the path open"
     if path == "blocked":
-        return "stop"
+        return "stop", "the camera marked the path blocked"
     if path == "approaching":
-        return "wait"
+        return "wait", "the camera marked a hazard approaching"
     if parsed.get("person") or parsed.get("vehicle"):
-        return "wait"
-    return "wait"
+        return "wait", "a person or vehicle is described and the way is not described as open"
+    return "wait", "the camera sentence does not say the way is open"
 
 
 BLOCKERS = (
@@ -1147,17 +1131,41 @@ def hazard_phrase(status: str, scene: str, parsed: dict) -> str:
 
 
 def spoken_look(status: str, scene: str, parsed: dict | None = None) -> str:
-    """Stop, Wait, or Clear, then a short phrase for what is in the way."""
+    """Stop, Wait, or Clear, then the camera's own short sentence."""
     parsed = parsed or {}
     label = {"stop": "Stop.", "wait": "Wait.", "clear": "Clear."}[status]
-    phrase = hazard_phrase(status, scene, parsed)
-    if not phrase:
-        phrase = {
+    description = one_short_sentence(scene, limit=16)
+    bare = (description or "").lower().rstrip(".!?")
+    if not description or bare == "none":
+        description = hazard_phrase(status, scene, parsed) or {
             "clear": "Nothing in the way.",
             "wait": "Something approaching.",
             "stop": "Something blocking.",
         }[status]
-    return f"{label} {phrase}"
+    elif description[0].islower():
+        description = description[0].upper() + description[1:]
+    if description[-1] not in ".!?":
+        description += "."
+    return f"{label} {description}"
+
+
+def yes_no_label(value) -> str:
+    if value is True:
+        return "yes"
+    if value is False:
+        return "no"
+    return "not said"
+
+
+def look_trace(parsed: dict, status: str, reason: str, spoken: str) -> str:
+    scene = (parsed.get("scene") or "").strip() or "none"
+    return (
+        f"Camera sentence: {scene}. "
+        f"Path {parsed.get('path') or 'unsure'}, "
+        f"person {yes_no_label(parsed.get('person'))}, "
+        f"vehicle {yes_no_label(parsed.get('vehicle'))}. "
+        f"Signal {status} because {reason}."
+    )
 
 
 def describe_look(image_b64: str, video_b64: str = "") -> dict:
@@ -1170,12 +1178,15 @@ def describe_look(image_b64: str, video_b64: str = "") -> dict:
             raise
         text = ""
     parsed = parse_look(text)
-    status = decide_look(parsed, counts)
+    status, reason = decide_look(parsed, counts)
+    spoken = spoken_look(status, parsed.get("scene") or "", parsed)
+    trace = look_trace(parsed, status, reason, spoken)
+    print(f"[luma] look {trace}")
     return {
         "status": status,
         "status_label": LOOK_LABELS[status],
-        "spoken": spoken_look(status, parsed.get("scene") or "", parsed),
-        "detail": "",
+        "spoken": spoken,
+        "detail": trace,
         "place_label": "Camera",
         "question": "Look now",
         "moments": [],

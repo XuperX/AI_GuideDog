@@ -225,7 +225,7 @@
     <main>
       <section aria-labelledby="look-heading">
         <h2 id="look-heading">Look now</h2>
-        <p>Point the camera, then press Look now. Every 4 seconds Luma says Stop, Wait, or Clear, then a short phrase for what is in the way. Things farther than about 1 meter are ignored until they are close enough to be in the way.</p>
+        <p>Point the camera, then press Look now. Every 4 seconds Luma says Stop, Wait, or Clear, then the camera's own short sentence.</p>
         <button type="button" id="look-now" class="look-now">Look now</button>
         <button type="button" id="stop-looking" class="secondary stop-looking" disabled>Stop looking</button>
         <video id="look-preview" muted playsinline hidden aria-label="Camera preview, sound off"></video>
@@ -400,7 +400,7 @@
       repeatBtn.disabled = !lastSpoken;
       if (data.detail) {
         detail.hidden = false;
-        detail.textContent = "More from the cameras: " + data.detail;
+        detail.textContent = (data.question === "Look now" ? "" : "More from the cameras: ") + data.detail;
       } else {
         detail.hidden = true;
         detail.textContent = "";
@@ -634,7 +634,7 @@
         if (/\bcane\b|sounding signal|person with you|step off|enter the road|enter the street/i.test(line)) line = "";
         if (!line) line = fallback(word);
         const words = line.split(/\s+/);
-        if (words.length > 8) line = words.slice(0, 8).join(" ");
+        if (words.length > 16) line = words.slice(0, 16).join(" ");
         return word + ". " + line + ".";
       };
       const tail = text.match(/^(.*?)\s+(Stop|Wait|Clear)\.?$/i);
