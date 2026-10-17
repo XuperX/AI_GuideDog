@@ -267,13 +267,16 @@ LOOK_PROMPT = (
 )
 JUDGE_PROMPT = (
     "You are judging a description of one camera frame for a person who cannot see. "
+    "A wrong Clear is dangerous. Be strict about hazards. "
     "Read the description and choose one signal. "
     "Reply with exactly two lines and nothing else:\n"
     "SIGNAL: Clear or Wait or Stop\n"
     "WHY: one short reason from the description.\n"
-    "Clear means the road or path ahead is open, or nothing is in the way. "
-    "Wait means a hazard is approaching but is not yet in the way. "
-    "Stop means something is an immediate blocker, already in the way. "
+    "Clear only when the description says the way ahead is empty, or the only things are parked or off to the side and nothing is moving toward the camera. "
+    "Do not choose Clear if a person, child, dog, bicycle, scooter, car, bus, or truck is ahead, crossing, close, or coming closer. "
+    "Wait when a hazard is approaching but is not yet in the way. "
+    "Stop when something is already in the way, crossing the path, or close enough to block the next step. "
+    "If the description leaves any doubt that a hazard is in the way, choose Stop. "
     "Do not give directions. Do not say to cross, step off a curb, or enter a road.\n"
     "Description:\n"
 )
